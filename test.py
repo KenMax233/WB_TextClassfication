@@ -232,7 +232,6 @@ def get_rnn_model(model_type):
         model.add(tf.keras.layers.GRU(16))
     else:
         pass
-
     model.add(tf.keras.layers.Dropout(0.3))
     model.add(tf.keras.layers.Dense(16, activation='relu'))
     model.add(tf.keras.layers.Dense(3, activation='softmax'))
@@ -243,6 +242,61 @@ def get_rnn_model(model_type):
                   metrics=['accuracy'])
     return model
 
+def get_textcnn_model():
+    """
+    Text-CNN 模型
+    :param model_type:
+    :return:
+    """
+    model = tf.keras.Sequential()
+    # 嵌入层
+    # model.add(tf.keras.layers.Embedding(DataConfig.vocab_size, 300, input_length=200))
+
+    # 嵌入层，加载预训练词向量
+    w2v_Model = word2vec.Word2Vec.load("./vocab/w2v.model")
+    # 加载词汇表
+    vocab_list = w2v_Model.wv.index_to_key
+    # 词典
+    word_index = {" ": 0}
+    word_vector = {}
+
+    # 初始化矩阵，首行padding补零。
+    # 行数为所有单词数+1，列数为词向量维度
+    embeddings_matrix = np.zeros((len(vocab_list) + 1, w2v_Model.vector_size))
+    # 填充字典和矩阵
+    for i in range(len(vocab_list)):
+        word = vocab_list[i]
+        word_index[word] = i + 1
+        word_vector[word] = w2v_Model.wv[word]
+        embeddings_matrix[i + 1] = w2v_Model.wv[word]
+
+    model.add(tf.keras.layers.Embedding(len(embeddings_matrix),
+                                        300,
+                                        weights=[embeddings_matrix],
+                                        input_length=200,
+                                        trainable=False
+                                        ))
+
+    # TextCNN
+    model.add(tf.keras.layers.Conv1D(256, 5, padding='same'))
+    model.add(tf.keras.layers.MaxPooling1D(3, 3, padding='same'))
+    model.add(tf.keras.layers.Conv1D(128, 5, padding='same'))
+    model.add(tf.keras.layers.MaxPooling1D(3, 3, padding='same'))
+    model.add(tf.keras.layers.Conv1D(64, 3, padding='same'))
+    model.add(tf.keras.layers.Flatten())
+    model.add(tf.keras.layers.Dropout(0.1))
+    model.add(tf.keras.layers.BatchNormalization())  # (批)规范化层
+    model.add(tf.keras.layers.Dense(256, activation='relu'))
+    model.add(tf.keras.layers.Dropout(0.1))
+    model.add(tf.keras.layers.Dense(3, activation='softmax'))
+
+    model.summary()
+    model.compile(optimizer='adam',
+                  loss='categorical_crossentropy',
+                  metrics=['accuracy'])
+    return model
+
+
 if __name__ == '__main__':
     # 数据集路径
     data_path = "./news_data"
@@ -251,10 +305,10 @@ if __name__ == '__main__':
     train_x, train_y = load_data(data_path)
 
     # 分词
-    split_sentence()
+#    split_sentence()
 
     #训练词向量
-    train_w2v(0)
+#    train_w2v(0)
 
 
     # 随机打乱数据集顺序
@@ -269,7 +323,8 @@ if __name__ == '__main__':
     y_val = train_y[:10000]
     partial_y_train = train_y[10000:]
 
-    model = get_rnn_model('bi-lstm')
+    model = get_textcnn_model()
+#    model = get_rnn_model('bi-lstm')
     model.fit(partial_x_train, partial_y_train,
               epochs=20, batch_size=512,
               validation_data=(x_val, y_val))
